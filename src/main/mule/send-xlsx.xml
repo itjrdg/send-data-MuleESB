@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="a20242f4-130d-42e7-806b-75e18dc06efe" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<file:config name="File_Config" doc:name="File Config" doc:id="32e12a54-2f09-4f3a-b394-42f8deadcb01" />
+	<flow name="send-xlsxFlow" doc:id="a8dc88fc-4336-4324-bcc6-607749b1d90f" >
+		<http:listener doc:name="/Get" doc:id="de76117f-6938-4d63-8b55-528247522024" config-ref="HTTP_Listener_config" path="send-xlsx" outputMimeType="application/xlsx"/>
+		<set-variable value="#[attributes.queryParams.format]" doc:name="Save queryParam as variable" doc:id="98879ea6-cf69-491a-a19a-f52e2960d571" variableName="queryParamDataFormat"/>
+		<set-variable value="#[attributes.headers.'content-type']" doc:name="save header content type as variable" doc:id="142dc56f-0417-43a3-b911-9dc39c2664d6" variableName="headerDataFormat"/>
+		<ee:transform doc:name="data format to be returned" doc:id="05d62b63-c56f-4993-aae9-3611cc150385" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="requested_data_format" ><![CDATA[%dw 2.0
+output application/json
+---
+if (isEmpty(vars.queryParamDataFormat) == true)
+splitBy(vars.headerDataFormat,'/')[1]
+
+else
+vars.queryParamDataFormat
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<file:read doc:name="Read" doc:id="55b06ac8-c787-4955-909b-8e47e2d4bf4d" config-ref="File_Config" path="C:\Users\tihlo\OneDrive\Documents\fish-data\airports.xlsx" outputMimeType="application/xlsx"/>
+		<choice doc:name="Choice" doc:id="4447609a-5608-4c45-9778-8264177a05d0" >
+			<when expression="#[vars.requested_data_format == 'csv']">
+				<ee:transform doc:name="csv" doc:id="27ac99bf-46ca-47f8-aadc-2614991a39e7" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/csv
+---
+payload.airports]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<when expression="#[vars.requested_data_format == 'json']">
+				<ee:transform doc:name="to json" doc:id="cf791869-2fbc-46c7-84e3-fa62c872ba96" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.airports]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<when expression="#[vars.requested_data_format == 'xml']">
+				<ee:transform doc:name="to xml" doc:id="181fe39e-e142-4ebc-b77e-3ad9f0a2707a">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/xml
+---
+{ 'airports':
+	{
+		'data': payload.airports
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<when expression="#[isEmpty(vars.requested_data_format)]">
+				<ee:transform doc:name="json when no data format specified" doc:id="42d579db-08af-47b4-b73e-00d430837c09" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.airports]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="invalid message" doc:id="89450394-1b41-411a-8958-8b7f9e5c228b" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	'message': vars.requested_data_format default " "++ 'is not supported data format'
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>
